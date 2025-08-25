@@ -46,11 +46,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?
     };
 
-    #[cfg(feature = "buildtime_bindgen")]
     generate_bindings(include_path)?;
-    #[cfg(not(feature = "buildtime_bindgen"))]
-    let _ = include_path;
-
     Ok(())
 }
 
@@ -68,9 +64,9 @@ fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std
         .size_t_is_usize(true)
         .blocklist_type("max_align_t");
 
-    //#[cfg(target_os = "android")]
+    #[cfg(target_os = "android")]
     let mut bindings = {
-        let ndk_path = env::var("ANDROID_NDK_HOME").expect("ANDROID_NDK_HOME not set");
+        let ndk_path = env::var("ANDROID_NDK").expect("ANDROID_NDK not set");
         let target = env::var("TARGET").expect("TARGET not set");
 
         // Example of setting clang/llvm path based on the target
@@ -92,7 +88,7 @@ fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std
             .clang_arg(format!("-I{}/sysroot/usr/include", llvm_bindir.replace("/bin", "")))
     };
 
-    bindings
+    let bindings = bindings
         // The input header we would like to generate
         // bindings for.
         .header("wrapper.h")
