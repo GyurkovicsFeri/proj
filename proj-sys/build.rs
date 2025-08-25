@@ -57,40 +57,35 @@ fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std
     // If you update the configuration here you also
     // need to update the corresponding bindgen command in
     // `DEVELOPMENT.md`
-    let mut bindings = bindgen::Builder::default();
 
-    let bindings = bindings
+    let bindings = bindgen::Builder::default()
         .clang_arg(format!("-I{}", include_path.to_string_lossy()))
         .size_t_is_usize(true)
         .blocklist_type("max_align_t");
 
-    //#[cfg(target_os = "android")]
-    let mut bindings = {
+    let bindings = {
         let ndk_path = env::var("ANDROID_NDK").expect("ANDROID_NDK not set");
         let target = env::var("TARGET").expect("TARGET not set");
 
-        // Example of setting clang/llvm path based on the target
-        let llvm_triple = match target.as_str() {
-            "aarch64-linux-android" => "aarch64-linux-android",
-            "armv7-linux-androideabi" => "armv7a-linux-androideabi",
-            // Add other Android targets
-            _ => panic!("Unsupported target"),
-        };
-        let llvm_bindir = format!("{}/toolchains/llvm/prebuilt/{}/bin", ndk_path, "windows-x86_64"); // Adjust for your host OS
+        if target.contains("android") {
+            let llvm_bindir = format!("{}/toolchains/llvm/prebuilt/{}/bin", ndk_path, "windows-x86_64"); // Adjust for your host OS
 
-        eprintln!("LIBCLANG_PATH={}", llvm_bindir);
-        eprintln!("sysroot={}", llvm_bindir.replace("/bin", ""));
+            eprintln!("LIBCLANG_PATH={}", llvm_bindir);
+            eprintln!("sysroot={}", llvm_bindir.replace("/bin", ""));
 
-        println!("cargo:rustc-env=LIBCLANG_PATH={}", llvm_bindir);
-        println!("cargo:rustc-env=CLANG_PATH={}", llvm_bindir);
-        println!("cargo:rerun-if-changed=wrapper.h");
+            println!("cargo:rustc-env=LIBCLANG_PATH={}", llvm_bindir);
+            println!("cargo:rustc-env=CLANG_PATH={}", llvm_bindir);
+            println!("cargo:rerun-if-changed=wrapper.h");
 
-        bindings
-            .header("wrapper.h")
-            .clang_arg(format!("--target={}", llvm_triple))
-            .clang_arg(format!("--sysroot={}/sysroot", llvm_bindir.replace("/bin", "")))
-            .clang_arg(format!("-I{}/sysroot/usr/include", llvm_bindir.replace("/bin", "")))
-            .clang_arg(format!("-I{}/lib/clang/21/include", llvm_bindir.replace("/bin", "")))
+            bindings
+                .header("wrapper.h")
+                .clang_arg(format!("--target={}", target))
+                .clang_arg(format!("--sysroot={}/sysroot", llvm_bindir.replace("/bin", "")))
+                .clang_arg(format!("-I{}/sysroot/usr/include", llvm_bindir.replace("/bin", "")))
+                .clang_arg(format!("-I{}/lib/clang/21/include", llvm_bindir.replace("/bin", "")))
+        } else {
+            bindings
+        }
     };
 
     let bindings = bindings
