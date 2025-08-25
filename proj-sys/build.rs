@@ -78,14 +78,19 @@ fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std
         };
         let llvm_bindir = format!("{}/toolchains/llvm/prebuilt/{}/bin", ndk_path, "windows-x86_64"); // Adjust for your host OS
 
+        eprintln!("LIBCLANG_PATH={}", llvm_bindir);
+        eprintln!("sysroot={}", llvm_bindir.replace("/bin", ""));
+
         println!("cargo:rustc-env=LIBCLANG_PATH={}", llvm_bindir);
+        println!("cargo:rustc-env=CLANG_PATH={}", llvm_bindir);
         println!("cargo:rerun-if-changed=wrapper.h");
 
         bindings
             .header("wrapper.h")
-            .clang_arg(format!("--target={}", target))
+            .clang_arg(format!("--target={}", llvm_triple))
             .clang_arg(format!("--sysroot={}/sysroot", llvm_bindir.replace("/bin", "")))
             .clang_arg(format!("-I{}/sysroot/usr/include", llvm_bindir.replace("/bin", "")))
+            .clang_arg(format!("-I{}/lib/clang/21/include", llvm_bindir.replace("/bin", "")))
     };
 
     let bindings = bindings

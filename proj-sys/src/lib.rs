@@ -33,11 +33,5 @@ extern crate libsqlite3_sys;
 #[cfg(bundled_build)]
 extern crate link_cplusplus;
 
-#[cfg(all(not(feature = "nobuild"), feature = "buildtime_bindgen"))]
+#[cfg(not(feature = "nobuild"))]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
-
-#[cfg(all(feature = "nobuild", not(feature = "buildtime_bindgen")))]
-include!("bindings_docs-rs.rs");
-
-#[cfg(all(not(feature = "nobuild"), not(feature = "buildtime_bindgen")))]
-include!("bundled_bindings.rs");
