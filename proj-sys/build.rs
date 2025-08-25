@@ -64,7 +64,7 @@ fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std
         .size_t_is_usize(true)
         .blocklist_type("max_align_t");
 
-    #[cfg(target_os = "android")]
+    //#[cfg(target_os = "android")]
     let mut bindings = {
         let ndk_path = env::var("ANDROID_NDK").expect("ANDROID_NDK not set");
         let target = env::var("TARGET").expect("TARGET not set");
