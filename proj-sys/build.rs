@@ -54,7 +54,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[cfg(feature = "buildtime_bindgen")]
 fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std::error::Error>> {
     // The bindgen::Builder is the main entry point
     // to bindgen, and lets you build up options for
@@ -62,10 +61,38 @@ fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std
     // If you update the configuration here you also
     // need to update the corresponding bindgen command in
     // `DEVELOPMENT.md`
-    let bindings = bindgen::Builder::default()
+    let mut bindings = bindgen::Builder::default();
+
+    let bindings = bindings
         .clang_arg(format!("-I{}", include_path.to_string_lossy()))
         .size_t_is_usize(true)
-        .blocklist_type("max_align_t")
+        .blocklist_type("max_align_t");
+
+    //#[cfg(target_os = "android")]
+    let mut bindings = {
+        let ndk_path = env::var("ANDROID_NDK_HOME").expect("ANDROID_NDK_HOME not set");
+        let target = env::var("TARGET").expect("TARGET not set");
+
+        // Example of setting clang/llvm path based on the target
+        let llvm_triple = match target.as_str() {
+            "aarch64-linux-android" => "aarch64-linux-android",
+            "armv7-linux-androideabi" => "armv7a-linux-androideabi",
+            // Add other Android targets
+            _ => panic!("Unsupported target"),
+        };
+        let llvm_bindir = format!("{}/toolchains/llvm/prebuilt/{}/bin", ndk_path, "windows-x86_64"); // Adjust for your host OS
+
+        println!("cargo:rustc-env=LIBCLANG_PATH={}", llvm_bindir);
+        println!("cargo:rerun-if-changed=wrapper.h");
+
+        bindings
+            .header("wrapper.h")
+            .clang_arg(format!("--target={}", target))
+            .clang_arg(format!("--sysroot={}/sysroot", llvm_bindir.replace("/bin", "")))
+            .clang_arg(format!("-I{}/sysroot/usr/include", llvm_bindir.replace("/bin", "")))
+    };
+
+    bindings
         // The input header we would like to generate
         // bindings for.
         .header("wrapper.h")

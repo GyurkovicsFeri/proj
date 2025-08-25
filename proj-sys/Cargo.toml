@@ -12,11 +12,11 @@ links = "proj"
 rust-version = "1.82"
 
 [dependencies]
-libsqlite3-sys = { version = ">=0.28,<0.36", features = ["bundled"] }
+libsqlite3-sys = { version = ">=0.28,<0.36", features = ["bundled", "buildtime_bindgen"] }
 link-cplusplus = "1.0.6"
 
 [build-dependencies]
-bindgen = { version = "0.71.1", optional = true }
+bindgen = { version = "0.71.1" }
 pkg-config = "0.3.25"
 cmake = "0.1.50"
 flate2 = "1.1.1"
