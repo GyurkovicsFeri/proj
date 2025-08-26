@@ -66,9 +66,11 @@ fn generate_bindings(include_path: std::path::PathBuf) -> Result<(), Box<dyn std
     let bindings = {
         let ndk_path = env::var("ANDROID_NDK").expect("ANDROID_NDK not set");
         let target = env::var("TARGET").expect("TARGET not set");
+        let host = env::var("HOST").expect("OS not set");
+        let host_parts: Vec<&str> = host.split("-").collect();
 
         if target.contains("android") {
-            let llvm_bindir = format!("{}/toolchains/llvm/prebuilt/{}/bin", ndk_path, "windows-x86_64"); // Adjust for your host OS
+            let llvm_bindir = format!("{}/toolchains/llvm/prebuilt/{}-{}/bin", ndk_path, std::env::consts::OS, host_parts[0]);
 
             eprintln!("LIBCLANG_PATH={}", llvm_bindir);
             eprintln!("sysroot={}", llvm_bindir.replace("/bin", ""));
