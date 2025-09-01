@@ -128,7 +128,7 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     archive.unpack(out_path.join("PROJSRC/proj"))?;
     let mut config =
         cmake::Config::new(out_path.join(format!("PROJSRC/proj/proj-{MINIMUM_PROJ_VERSION}")));
-    config.define("BUILD_SHARED_LIBS", "ON");
+    config.define("BUILD_SHARED_LIBS", "OFF");
     config.define("BUILD_TESTING", "OFF");
     config.define("BUILD_CCT", "OFF");
     config.define("BUILD_CS2CS", "OFF");
