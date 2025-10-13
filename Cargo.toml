@@ -31,6 +31,7 @@ default = ["geo-types", "bundled_proj"]
 bundled_proj = [ "proj-sys/bundled_proj" ]
 pkg_config = [ "proj-sys/pkg_config" ]
 network = ["ureq", "http", "proj-sys/network"]
+tiff = ["proj-sys/tiff"]
 
 [dev-dependencies]
 # approx version must match the one used in geo-types
