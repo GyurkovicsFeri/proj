@@ -121,28 +121,40 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
 
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
     
-    let tiff_src = PathBuf::from("PROJSRC/libtiff");
-    eprintln!("building libtiff from {:?}", tiff_src);
-    
-    let mut tiff_cfg = cmake::Config::new(&tiff_src);
-    tiff_cfg.profile("Release");
-    tiff_cfg.define("BUILD_SHARED_LIBS", "OFF");
-    tiff_cfg.define("tiff-tools", "OFF");
-    tiff_cfg.define("tiff-tests", "OFF");
-    tiff_cfg.define("tiff-docs", "OFF");
-    
-    tiff_cfg.define("JPEG_SUPPORT", "OFF");
-    tiff_cfg.define("ZLIB_SUPPORT", "OFF");
-    tiff_cfg.define("LZMA_SUPPORT", "OFF");
-    tiff_cfg.define("WEBP_SUPPORT", "OFF");
-    
-    let tiff_build = tiff_cfg.build();
-    
-    let tiff_include = tiff_build.join("include");
-    let tiff_lib_dir = tiff_build.join("lib");
-    
-    println!("cargo:rustc-link-search=native={}", tiff_lib_dir.display());
-    println!("cargo:rustc-link-lib=static=tiff");
+    let (tiff_include, tiff_lib_dir) = if cfg!(feature = "tiff") {
+        eprintln!("feature 'tiff' enabled — building libtiff from source");
+
+        let tiff_src = PathBuf::from("PROJSRC/libtiff");
+        if !tiff_src.exists() {
+            panic!(
+                "Missing libtiff source directory at {:?}. Did you vendor or clone it?",
+                tiff_src
+            );
+        }
+
+        let mut tiff_cfg = cmake::Config::new(&tiff_src);
+        tiff_cfg.profile("Release");
+        tiff_cfg.define("BUILD_SHARED_LIBS", "OFF");
+        tiff_cfg.define("tiff-tools", "OFF");
+        tiff_cfg.define("tiff-tests", "OFF");
+        tiff_cfg.define("tiff-docs", "OFF");
+        tiff_cfg.define("JPEG_SUPPORT", "OFF");
+        tiff_cfg.define("ZLIB_SUPPORT", "OFF");
+        tiff_cfg.define("LZMA_SUPPORT", "OFF");
+        tiff_cfg.define("WEBP_SUPPORT", "OFF");
+
+        let tiff_build = tiff_cfg.build();
+        let include = tiff_build.join("include");
+        let lib_dir = tiff_build.join("lib");
+
+        println!("cargo:rustc-link-search=native={}", lib_dir.display());
+        println!("cargo:rustc-link-lib=static=tiff");
+
+        (Some(include), Some(lib_dir))
+    } else {
+        eprintln!("feature 'tiff' disabled — skipping libtiff build");
+        (None, None)
+    };
     
     
     let path = format!("PROJSRC/proj-{MINIMUM_PROJ_VERSION}.tar.gz");
@@ -179,16 +191,13 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         config.define("SQLITE3_LIBRARY", format!("{sqlite_lib_dir}/libsqlite3.a",));
     }
 
-    if cfg!(feature = "tiff") {
-        eprintln!("enabling tiff support");
+    if let (Some(tiff_inc), Some(tiff_lib)) = (&tiff_include, &tiff_lib_dir) {
+        eprintln!("enabling TIFF support in PROJ build");
         config.define("ENABLE_TIFF", "ON");
-        config.define("TIFF_INCLUDE_DIR", tiff_include.display().to_string());
-        config.define(
-            "TIFF_LIBRARY",
-            tiff_lib_dir.join("tiff.lib").display().to_string(),
-        );
+        config.define("TIFF_INCLUDE_DIR", tiff_inc.display().to_string());
+        config.define("TIFF_LIBRARY", tiff_lib.join("tiff.lib").display().to_string());
     } else {
-        eprintln!("disabling tiff support");
+        eprintln!("disabling TIFF support in PROJ build");
         config.define("ENABLE_TIFF", "OFF");
     }
 
