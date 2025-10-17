@@ -119,8 +119,33 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         }
     }
 
-    let path = format!("PROJSRC/proj-{MINIMUM_PROJ_VERSION}.tar.gz");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
+    
+    let tiff_src = PathBuf::from("PROJSRC/libtiff");
+    eprintln!("building libtiff from {:?}", tiff_src);
+    
+    let mut tiff_cfg = cmake::Config::new(&tiff_src);
+    tiff_cfg.profile("Release");
+    tiff_cfg.define("BUILD_SHARED_LIBS", "OFF");
+    tiff_cfg.define("tiff-tools", "OFF");
+    tiff_cfg.define("tiff-tests", "OFF");
+    tiff_cfg.define("tiff-docs", "OFF");
+    
+    tiff_cfg.define("JPEG_SUPPORT", "OFF");
+    tiff_cfg.define("ZLIB_SUPPORT", "OFF");
+    tiff_cfg.define("LZMA_SUPPORT", "OFF");
+    tiff_cfg.define("WEBP_SUPPORT", "OFF");
+    
+    let tiff_build = tiff_cfg.build();
+    
+    let tiff_include = tiff_build.join("include");
+    let tiff_lib_dir = tiff_build.join("lib");
+    
+    println!("cargo:rustc-link-search=native={}", tiff_lib_dir.display());
+    println!("cargo:rustc-link-lib=static=tiff");
+    
+    
+    let path = format!("PROJSRC/proj-{MINIMUM_PROJ_VERSION}.tar.gz");
     let tar_gz = File::open(path)?;
     let tar = GzDecoder::new(tar_gz);
     let mut archive = Archive::new(tar);
@@ -157,6 +182,11 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     if cfg!(feature = "tiff") {
         eprintln!("enabling tiff support");
         config.define("ENABLE_TIFF", "ON");
+        config.define("TIFF_INCLUDE_DIR", tiff_include.display().to_string());
+        config.define(
+            "TIFF_LIBRARY",
+            tiff_lib_dir.join("tiff.lib").display().to_string(),
+        );
     } else {
         eprintln!("disabling tiff support");
         config.define("ENABLE_TIFF", "OFF");
@@ -195,11 +225,6 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         "cargo:rustc-link-search={}",
         &out_path.join("build/lib").display()
     );
-
-    if cfg!(feature = "tiff") {
-        eprintln!("enabling tiff support");
-        config.define("ENABLE_TIFF", "ON");
-    }
 
     Ok(proj.join("include"))
 }
