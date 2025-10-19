@@ -133,15 +133,12 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         }
 
         let mut tiff_cfg = cmake::Config::new(&tiff_src);
-        tiff_cfg.profile("Release");
         tiff_cfg.define("BUILD_SHARED_LIBS", "OFF");
         tiff_cfg.define("tiff-tools", "OFF");
         tiff_cfg.define("tiff-tests", "OFF");
         tiff_cfg.define("tiff-docs", "OFF");
-        tiff_cfg.define("JPEG_SUPPORT", "OFF");
-        tiff_cfg.define("ZLIB_SUPPORT", "OFF");
-        tiff_cfg.define("LZMA_SUPPORT", "OFF");
-        tiff_cfg.define("WEBP_SUPPORT", "OFF");
+        tiff_cfg.define("tiff-contrib", "OFF");
+        tiff_cfg.define("tiff-static", "ON");
 
         let tiff_build = tiff_cfg.build();
         let include = tiff_build.join("include");
@@ -191,11 +188,25 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         config.define("SQLITE3_LIBRARY", format!("{sqlite_lib_dir}/libsqlite3.a",));
     }
 
+    
     if let (Some(tiff_inc), Some(tiff_lib)) = (&tiff_include, &tiff_lib_dir) {
+        let target = env::var("TARGET").unwrap_or_default();
         eprintln!("enabling TIFF support in PROJ build");
         config.define("ENABLE_TIFF", "ON");
         config.define("TIFF_INCLUDE_DIR", tiff_inc.display().to_string());
-        config.define("TIFF_LIBRARY", tiff_lib.join("tiff.lib").display().to_string());
+
+        let tiff_library = if target.contains("android") {
+            tiff_lib.join("libtiff.a")
+        } else if target.contains("windows") {
+            tiff_lib.join("tiff.lib")
+        } else {
+            tiff_lib.join("libtiff.a")
+        };
+
+        config.define("TIFF_LIBRARY", tiff_library.display().to_string());
+
+        println!("cargo:rustc-link-search=native={}", tiff_lib.display());
+        println!("cargo:rustc-link-lib=static=tiff");
     } else {
         eprintln!("disabling TIFF support in PROJ build");
         config.define("ENABLE_TIFF", "OFF");
