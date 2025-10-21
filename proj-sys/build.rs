@@ -133,6 +133,7 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         }
 
         let mut tiff_cfg = cmake::Config::new(&tiff_src);
+        tiff_cfg.profile("Release");
         tiff_cfg.define("BUILD_SHARED_LIBS", "OFF");
         tiff_cfg.define("tiff-tools", "OFF");
         tiff_cfg.define("tiff-tests", "OFF");
@@ -173,6 +174,45 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     config.define("BUILD_PROJINFO", "OFF");
     config.define("BUILD_PROJSYNC", "OFF");
     config.define("ENABLE_CURL", "OFF");
+
+    let target = env::var("TARGET").unwrap_or_default();
+    if target.contains("android") && cfg!(feature = "tiff") {
+        eprintln!("configuring zlib from Android NDK");
+
+        let ndk_path = env::var("ANDROID_NDK")
+            .expect("ANDROID_NDK environment variable must be set for Android builds");
+
+        let os = std::env::consts::OS;
+        let host = env::var("HOST").expect("OS not set");
+        let host_parts: Vec<&str> = host.split("-").collect();
+        let sysroot_base = if os == "macos" {
+            format!("{}/toolchains/llvm/prebuilt/darwin-x86_64", ndk_path)
+        } else {
+            format!(
+                "{}/toolchains/llvm/prebuilt/{}-{}",
+                ndk_path, os, host_parts[0]
+            )
+        };
+
+        let target_triple = match target.as_str() {
+            t if t.contains("aarch64") => "aarch64-linux-android",
+            t if t.contains("armv7") => "arm-linux-androideabi",
+            t if t.contains("i686") => "i686-linux-android",
+            t if t.contains("x86_64") => "x86_64-linux-android",
+            _ => panic!("Unsupported Android target: {}", target),
+        };
+
+        let sysroot_include = format!("{}/sysroot/usr/include", sysroot_base);
+        let sysroot_lib = format!("{}/sysroot/usr/lib/{}", sysroot_base, target_triple);
+
+        config.define("ZLIB_INCLUDE_DIR", &sysroot_include);
+        config.define("ZLIB_LIBRARY", format!("{}/libz.a", sysroot_lib));
+
+        println!("cargo:rustc-link-search=native={}", sysroot_lib);
+        println!("cargo:rustc-link-lib=z");
+
+        eprintln!("linked Android zlib: {}", format!("{}/libz.a", sysroot_lib));
+    }
 
     // we check here whether or not these variables are set by cargo
     // if they are set, `libsqlite3-sys` was built with the bundled feature
