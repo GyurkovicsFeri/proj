@@ -177,7 +177,7 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
 
     let target = env::var("TARGET").unwrap_or_default();
     if target.contains("android") && cfg!(feature = "tiff") {
-        eprintln!("configuring zlib from Android NDK");
+        eprintln!("configuring zlib from Android NDK (copied into OUT_DIR)");
 
         let ndk_path = env::var("ANDROID_NDK")
             .expect("ANDROID_NDK environment variable must be set for Android builds");
@@ -188,10 +188,7 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         let sysroot_base = if os == "macos" {
             format!("{}/toolchains/llvm/prebuilt/darwin-x86_64", ndk_path)
         } else {
-            format!(
-                "{}/toolchains/llvm/prebuilt/{}-{}",
-                ndk_path, os, host_parts[0]
-            )
+            format!("{}/toolchains/llvm/prebuilt/{}-{}", ndk_path, os, host_parts[0])
         };
 
         let target_triple = match target.as_str() {
@@ -202,16 +199,31 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
             _ => panic!("Unsupported Android target: {}", target),
         };
 
-        let sysroot_include = format!("{}/sysroot/usr/include", sysroot_base);
-        let sysroot_lib = format!("{}/sysroot/usr/lib/{}", sysroot_base, target_triple);
+        let sysroot_include = PathBuf::from(format!("{}/sysroot/usr/include", sysroot_base));
+        let sysroot_lib_dir = PathBuf::from(format!("{}/sysroot/usr/lib/{}", sysroot_base, target_triple));
+        let sysroot_lib = sysroot_lib_dir.join("libz.a");
 
-        config.define("ZLIB_INCLUDE_DIR", &sysroot_include);
-        config.define("ZLIB_LIBRARY", format!("{}/libz.a", sysroot_lib));
+        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
+        let zlib_out_dir = out_dir.join("zlib");
+        std::fs::create_dir_all(&zlib_out_dir)?;
 
-        println!("cargo:rustc-link-search=native={}", sysroot_lib);
-        println!("cargo:rustc-link-lib=z");
+        let zlib_include_out = zlib_out_dir.join("include");
+        std::fs::create_dir_all(&zlib_include_out)?;
+        std::fs::copy(sysroot_include.join("zlib.h"), zlib_include_out.join("zlib.h"))?;
+        std::fs::copy(sysroot_include.join("zconf.h"), zlib_include_out.join("zconf.h"))?;
 
-        eprintln!("linked Android zlib: {}", format!("{}/libz.a", sysroot_lib));
+        let zlib_lib_out = zlib_out_dir.join("libz.a");
+        std::fs::copy(&sysroot_lib, &zlib_lib_out)?;
+
+        eprintln!("Copied NDK zlib files to {}", zlib_out_dir.display());
+
+        config.define("ZLIB_INCLUDE_DIR", zlib_include_out.display().to_string());
+        config.define("ZLIB_LIBRARY", zlib_lib_out.display().to_string());
+
+        println!("cargo:rustc-link-search=native={}", zlib_out_dir.display());
+        println!("cargo:rustc-link-lib=static=z");
+
+        eprintln!("linked zlib from OUT_DIR: {}", zlib_lib_out.display());
     }
 
     // we check here whether or not these variables are set by cargo
