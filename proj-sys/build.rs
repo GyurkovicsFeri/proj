@@ -175,55 +175,40 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     config.define("BUILD_PROJSYNC", "OFF");
     config.define("ENABLE_CURL", "OFF");
 
-    let target = env::var("TARGET").unwrap_or_default();
-    if target.contains("android") && cfg!(feature = "tiff") {
-        eprintln!("configuring zlib from Android NDK (copied into OUT_DIR)");
+    if cfg!(feature = "tiff") {
+        //Building zlib
+        eprintln!("building zlib from source (PROJSRC/zlib-1.3.1.tar.gz)");
 
-        let ndk_path = env::var("ANDROID_NDK")
-            .expect("ANDROID_NDK environment variable must be set for Android builds");
+        let zlib_src = PathBuf::from("PROJSRC/zlib-1.3.1.tar.gz");
+        let zlib_out_dir = out_path.join("PROJSRC/zlib");
 
-        let os = std::env::consts::OS;
-        let host = env::var("HOST").expect("OS not set");
-        let host_parts: Vec<&str> = host.split("-").collect();
-        let sysroot_base = if os == "macos" {
-            format!("{}/toolchains/llvm/prebuilt/darwin-x86_64", ndk_path)
+        if zlib_src.exists() {
+            let tar_gz = File::open(zlib_src)
+                .expect("Missing PROJSRC/zlib-1.3.1.tar.gz");
+            let tar = GzDecoder::new(tar_gz);
+            let mut archive = Archive::new(tar);
+            archive.unpack(&zlib_out_dir).expect("Failed to unpack zlib source");
+        }
+
+        let mut zlib_cfg = cmake::Config::new(&zlib_out_dir.join("zlib-1.3.1"));
+        zlib_cfg.profile("Release");
+        zlib_cfg
+            .define("BUILD_SHARED_LIBS", "OFF")
+            .define("CMAKE_POSITION_INDEPENDENT_CODE", "ON")
+            .define("SKIP_INSTALL_FILES", "ON");
+
+        let zlib_build = zlib_cfg.build();
+        //let zlib_include = zlib_build.join("include");
+        let zlib_lib_dir = zlib_build.join("lib");
+
+        let target = std::env::var("TARGET").unwrap_or_default();
+
+        println!("cargo:rustc-link-search=native={}", zlib_lib_dir.display());
+        if target.contains("windows-msvc") {
+            println!("cargo:rustc-link-lib=static=zlibstatic");
         } else {
-            format!("{}/toolchains/llvm/prebuilt/{}-{}", ndk_path, os, host_parts[0])
-        };
-
-        let target_triple = match target.as_str() {
-            t if t.contains("aarch64") => "aarch64-linux-android",
-            t if t.contains("armv7") => "arm-linux-androideabi",
-            t if t.contains("i686") => "i686-linux-android",
-            t if t.contains("x86_64") => "x86_64-linux-android",
-            _ => panic!("Unsupported Android target: {}", target),
-        };
-
-        let sysroot_include = PathBuf::from(format!("{}/sysroot/usr/include", sysroot_base));
-        let sysroot_lib_dir = PathBuf::from(format!("{}/sysroot/usr/lib/{}", sysroot_base, target_triple));
-        let sysroot_lib = sysroot_lib_dir.join("libz.a");
-
-        let out_dir = PathBuf::from(env::var("OUT_DIR").unwrap());
-        let zlib_out_dir = out_dir.join("zlib");
-        std::fs::create_dir_all(&zlib_out_dir)?;
-
-        let zlib_include_out = zlib_out_dir.join("include");
-        std::fs::create_dir_all(&zlib_include_out)?;
-        std::fs::copy(sysroot_include.join("zlib.h"), zlib_include_out.join("zlib.h"))?;
-        std::fs::copy(sysroot_include.join("zconf.h"), zlib_include_out.join("zconf.h"))?;
-
-        let zlib_lib_out = zlib_out_dir.join("libz.a");
-        std::fs::copy(&sysroot_lib, &zlib_lib_out)?;
-
-        eprintln!("Copied NDK zlib files to {}", zlib_out_dir.display());
-
-        config.define("ZLIB_INCLUDE_DIR", zlib_include_out.display().to_string());
-        config.define("ZLIB_LIBRARY", zlib_lib_out.display().to_string());
-
-        println!("cargo:rustc-link-search=native={}", zlib_out_dir.display());
-        println!("cargo:rustc-link-lib=static=z");
-
-        eprintln!("linked zlib from OUT_DIR: {}", zlib_lib_out.display());
+            println!("cargo:rustc-link-lib=static=z");
+        }
     }
 
     // we check here whether or not these variables are set by cargo
