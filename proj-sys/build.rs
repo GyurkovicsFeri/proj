@@ -175,37 +175,6 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     config.define("BUILD_PROJSYNC", "OFF");
     config.define("ENABLE_CURL", "OFF");
 
-    let (zlib_include, zlib_lib_dir) = if cfg!(feature = "tiff") {
-        //Building zlib
-        eprintln!("building zlib from source (PROJSRC/zlib-1.3.1.tar.gz)");
-
-        let zlib_src = PathBuf::from("PROJSRC/zlib-1.3.1.tar.gz");
-        let zlib_out_dir = out_path.join("PROJSRC/zlib");
-
-        if zlib_src.exists() {
-            let tar_gz = File::open(zlib_src)
-                .expect("Missing PROJSRC/zlib-1.3.1.tar.gz");
-            let tar = GzDecoder::new(tar_gz);
-            let mut archive = Archive::new(tar);
-            archive.unpack(&zlib_out_dir).expect("Failed to unpack zlib source");
-        }
-
-        let mut zlib_cfg = cmake::Config::new(&zlib_out_dir.join("zlib-1.3.1"));
-        zlib_cfg.profile("Release");
-        zlib_cfg
-            .define("BUILD_SHARED_LIBS", "OFF")
-            .define("CMAKE_POSITION_INDEPENDENT_CODE", "ON")
-            .define("SKIP_INSTALL_FILES", "ON");
-
-        let zlib_build = zlib_cfg.build();
-        let include = zlib_build.join("include");
-        let lib_dir = zlib_build.join("lib");
-
-        (Some(include), Some(lib_dir))
-    } else {
-        (None, None)
-    };
-
     // we check here whether or not these variables are set by cargo
     // if they are set, `libsqlite3-sys` was built with the bundled feature
     // enabled, which in turn allows us to rely on the built libsqlite3 version
@@ -220,23 +189,18 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         config.define("SQLITE3_LIBRARY", format!("{sqlite_lib_dir}/libsqlite3.a",));
     }
 
-    if let (Some(zlib_inc), Some(zlib_lib)) = (&zlib_include, &zlib_lib_dir) {
+    if let Ok(zlib_root_dir) = std::env::var("DEP_Z_ROOT") {
         let target = std::env::var("TARGET").unwrap_or_default();
-
-        config.define("ZLIB_INCLUDE_DIR", zlib_inc.display().to_string());
-
-        let zlib_library = if target.contains("windows-msvc") {
-            zlib_lib.join("zlibstatic.lib")
-        } else {
-            zlib_lib.join("libz.a")
-        };
-
-        config.define("ZLIB_LIBRARY", zlib_library.display().to_string());
-
-        println!("cargo:rustc-link-search=native={}", zlib_lib.display());
-        if target.contains("windows-msvc") {
-            println!("cargo:rustc-link-lib=static=zlibstatic");
-        } else {
+        if !target.contains("windows-msvc") {
+            let zlib_root = std::path::Path::new(&zlib_root_dir);
+    
+            let zlib_include = zlib_root.join("include");
+            let zlib_lib_dir = zlib_root.join("lib");
+    
+            config.define("Z_INCLUDE_DIR", zlib_include.display().to_string());
+            config.define("Z_LIBRARY", zlib_lib_dir.join("libz.a").display().to_string());
+    
+            println!("cargo:rustc-link-search=native={}", zlib_lib_dir.display());
             println!("cargo:rustc-link-lib=static=z");
         }
     }
