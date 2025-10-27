@@ -175,7 +175,7 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     config.define("BUILD_PROJSYNC", "OFF");
     config.define("ENABLE_CURL", "OFF");
 
-    if cfg!(feature = "tiff") {
+    let (zlib_include, zlib_lib_dir) = if cfg!(feature = "tiff") {
         //Building zlib
         eprintln!("building zlib from source (PROJSRC/zlib-1.3.1.tar.gz)");
 
@@ -198,18 +198,13 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
             .define("SKIP_INSTALL_FILES", "ON");
 
         let zlib_build = zlib_cfg.build();
-        //let zlib_include = zlib_build.join("include");
-        let zlib_lib_dir = zlib_build.join("lib");
+        let include = zlib_build.join("include");
+        let lib_dir = zlib_build.join("lib");
 
-        let target = std::env::var("TARGET").unwrap_or_default();
-
-        println!("cargo:rustc-link-search=native={}", zlib_lib_dir.display());
-        if target.contains("windows-msvc") {
-            println!("cargo:rustc-link-lib=static=zlibstatic");
-        } else {
-            println!("cargo:rustc-link-lib=static=z");
-        }
-    }
+        (Some(include), Some(lib_dir))
+    } else {
+        (None, None)
+    };
 
     // we check here whether or not these variables are set by cargo
     // if they are set, `libsqlite3-sys` was built with the bundled feature
@@ -225,6 +220,26 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
         config.define("SQLITE3_LIBRARY", format!("{sqlite_lib_dir}/libsqlite3.a",));
     }
 
+    if let (Some(zlib_inc), Some(zlib_lib)) = (&zlib_include, &zlib_lib_dir) {
+        let target = std::env::var("TARGET").unwrap_or_default();
+
+        config.define("ZLIB_INCLUDE_DIR", zlib_inc.display().to_string());
+
+        let zlib_library = if target.contains("windows-msvc") {
+            zlib_lib.join("zlibstatic.lib")
+        } else {
+            zlib_lib.join("libz.a")
+        };
+
+        config.define("ZLIB_LIBRARY", zlib_library.display().to_string());
+
+        println!("cargo:rustc-link-search=native={}", zlib_lib.display());
+        if target.contains("windows-msvc") {
+            println!("cargo:rustc-link-lib=static=zlibstatic");
+        } else {
+            println!("cargo:rustc-link-lib=static=z");
+        }
+    }
     
     if let (Some(tiff_inc), Some(tiff_lib)) = (&tiff_include, &tiff_lib_dir) {
         let target = env::var("TARGET").unwrap_or_default();
