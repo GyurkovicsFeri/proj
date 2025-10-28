@@ -196,6 +196,10 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     
             let zlib_include = zlib_root.join("include");
             let zlib_lib_dir = zlib_root.join("lib");
+
+            config.define("ZLIB_ROOT", zlib_root.display().to_string());
+            config.define("ZLIB_INCLUDE_DIR", zlib_include.display().to_string());
+            config.define("ZLIB_LIBRARY", zlib_lib_dir.join("libz.a").display().to_string());
     
             config.define("Z_INCLUDE_DIR", zlib_include.display().to_string());
             config.define("Z_LIBRARY", zlib_lib_dir.join("libz.a").display().to_string());
