@@ -197,8 +197,27 @@ fn build_from_source() -> Result<std::path::PathBuf, Box<dyn std::error::Error>>
     );
 
     if cfg!(feature = "tiff") {
-        eprintln!("enabling tiff support");
-        config.define("ENABLE_TIFF", "ON");
+        // On platforms like apples aarch64, users are likely to have installed libtiff with homebrew,
+        // which isn't in the default search path, so try to determine path from pkg-config
+        match pkg_config::Config::new()
+            .atleast_version("4.0")
+            .probe("libtiff-4")
+        {
+            Ok(pk) => {
+                eprintln!(
+                    "found acceptable libtiff installed at: {:?}",
+                    pk.link_paths[0]
+                );
+                println!("cargo:rustc-link-search=native={:?}", pk.link_paths[0]);
+            }
+            Err(err) => {
+                // pkg-config might not even be installed. Let's try to stumble forward
+                // to see if the build succeeds regardless, e.g. if libtiff is installed
+                // in some default search path.
+                eprintln!("Failed to find libtiff with pkg-config: {err}");
+            }
+        }
+        println!("cargo:rustc-link-lib=dylib=tiff");
     }
 
     Ok(proj.join("include"))
